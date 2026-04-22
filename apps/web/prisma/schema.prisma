@@ -1,0 +1,303 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Multi-tenant core
+model Tenant {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  domain       String?      @unique
+  plan         PlanType     @default(BASIC)
+  businessType BusinessType @default(RESTAURANT)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  users        User[]
+  branches     Branch[]
+  roles        Role[]
+  menuItems    MenuItem[]
+  categories   MenuCategory[]
+  shifts       Shift[]
+  ingredients  Ingredient[]
+  customers    Customer[]
+  promotions   Promotion[]
+}
+
+enum BusinessType {
+  RESTAURANT
+  CLOTHING
+}
+
+enum PlanType {
+  BASIC
+  STANDARD
+  PREMIUM
+  ENTERPRISE
+}
+
+model User {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  email      String   @unique
+  password   String
+  name       String
+  tenantId   String   @db.ObjectId
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  roleId     String?  @db.ObjectId
+  role       Role?    @relation(fields: [roleId], references: [id])
+  pin        String?  // 4-digit pin for quick POS login
+  fatherName String?
+  cnic       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  orders     Order[]
+  shifts     Shift[]
+}
+
+model Shift {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String      @db.ObjectId
+  user      User        @relation(fields: [userId], references: [id])
+  startTime DateTime    @default(now())
+  endTime   DateTime?
+  status    ShiftStatus @default(ACTIVE)
+  tenantId  String      @db.ObjectId
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+}
+
+enum ShiftStatus {
+  ACTIVE
+  CLOSED
+}
+
+model Role {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  permissions String[] // JSON or Array of permissions (e.g. ['POS_ACCESS', 'INVENTORY_MANAGE'])
+  tenantId    String   @db.ObjectId
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  users       User[]
+}
+
+model Branch {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  location  String?
+  tenantId  String   @db.ObjectId
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tables    Table[]
+  orders    Order[]
+}
+
+// POS Models
+model MenuCategory {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  tenantId String   @db.ObjectId
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  items    MenuItem[]
+}
+
+model MenuItem {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  price       Float
+  image       String?
+  isAvailable Boolean  @default(true)
+  categoryId  String   @db.ObjectId
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  tenantId    String   @db.ObjectId
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  variants    MenuItemVariant[]
+  addons      MenuItemAddon[]
+
+  orderItems  OrderItem[]
+  ingredients MenuItemIngredient[]
+}
+
+type MenuItemVariant {
+  name  String
+  price Float
+}
+
+type MenuItemAddon {
+  name  String
+  price Float
+}
+
+model Table {
+  id       String      @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  capacity Int         @default(2)
+  x        Float       @default(0)
+  y        Float       @default(0)
+  status   TableStatus @default(AVAILABLE)
+  branchId String      @db.ObjectId
+  branch   Branch      @relation(fields: [branchId], references: [id])
+
+  orders   Order[]
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  BILL_PENDING
+}
+
+model Order {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber  String      @unique
+  type         OrderType
+  status       OrderStatus @default(PENDING)
+  totalAmount  Float
+
+  userId       String?     @db.ObjectId
+  user         User?       @relation(fields: [userId], references: [id])
+  tableId      String?     @db.ObjectId
+  table        Table?      @relation(fields: [tableId], references: [id])
+  branchId     String      @db.ObjectId
+  branch       Branch      @relation(fields: [branchId], references: [id])
+
+  items        OrderItem[]
+  payments     Payment[]
+
+  customerId   String?      @db.ObjectId
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+
+  promotionId  String?      @db.ObjectId
+  promotion    Promotion?   @relation(fields: [promotionId], references: [id])
+  discountAmount Float      @default(0)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  COMPLETED
+  CANCELLED
+}
+
+model OrderItem {
+  id         String          @id @default(auto()) @map("_id") @db.ObjectId
+  orderId    String          @db.ObjectId
+  order      Order           @relation(fields: [orderId], references: [id])
+  itemId     String          @db.ObjectId
+  item       MenuItem        @relation(fields: [itemId], references: [id])
+  quantity   Int
+  price      Float
+
+  variantName String?
+  addonNames  String[]
+
+  notes      String?
+  status     OrderItemStatus @default(PENDING)
+}
+
+enum OrderItemStatus {
+  PENDING
+  PREPARING
+  COMPLETED
+}
+
+model Ingredient {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  stockUnit     String
+  currentStock  Float    @default(0)
+  lowStockAlert Float    @default(10)
+
+  tenantId      String   @db.ObjectId
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+
+  menuItems     MenuItemIngredient[]
+}
+
+model MenuItemIngredient {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  menuItemId   String     @db.ObjectId
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id])
+  ingredientId String     @db.ObjectId
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+  quantity     Float
+}
+
+model Payment {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  orderId   String        @db.ObjectId
+  order     Order         @relation(fields: [orderId], references: [id])
+  amount    Float
+  method    PaymentMethod
+  status    PaymentStatus @default(COMPLETED)
+  createdAt DateTime      @default(now())
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Customer {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String   @unique
+  points    Float    @default(0)
+
+  tenantId  String   @db.ObjectId
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Promotion {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  code      String        @unique
+  type      PromotionType
+  value     Float
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean       @default(true)
+
+  tenantId  String        @db.ObjectId
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
