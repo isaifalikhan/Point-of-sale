@@ -1,0 +1,57 @@
+### dependencies
+node_modules/
+.pnp.*
+
+### package managers
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+### build outputs
+dist/
+build/
+out/
+coverage/
+
+### Next.js / React / Vite common
+.next/
+.next/cache/
+.vercel/
+.vite/
+
+### caches (monorepos / tooling)
+.turbo/
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+### env files (keep secrets out of git)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+### logs
+logs/
+*.log
+
+### OS / editor junk
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+### IDEs
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+.idea/
+*.iml
+
+### Misc
+*.tgz
+*.swp
